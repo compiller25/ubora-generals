@@ -1,41 +1,35 @@
-import nodemailer from 'nodemailer';
 import { google } from 'googleapis';
 
-const OAuth2 = google.auth.OAuth2;
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GMAIL_CLIENT_ID,
+  process.env.GMAIL_CLIENT_SECRET,
+  'https://developers.google.com/oauthplayground'
+);
 
-async function createTransporter() {
-  const oauth2Client = new OAuth2(
-    process.env.GMAIL_CLIENT_ID,
-    process.env.GMAIL_CLIENT_SECRET,
-    'https://developers.google.com/oauthplayground'
-  );
+oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
 
-  oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
+const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-  const { token: accessToken } = await oauth2Client.getAccessToken();
+function makeRawEmail(to: string, subject: string, html: string): string {
+  const message = [
+    `From: "Ubora Generals" <${process.env.EMAIL_USER}>`,
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    html,
+  ].join('\n');
 
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      type: 'OAuth2',
-      user: process.env.EMAIL_USER,
-      clientId: process.env.GMAIL_CLIENT_ID,
-      clientSecret: process.env.GMAIL_CLIENT_SECRET,
-      refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-      accessToken: accessToken!,
-    },
-  } as any);
+  return Buffer.from(message).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 export async function sendEmail(to: string, subject: string, html: string) {
   try {
     console.log(`Attempting to send email to: ${to}`);
-    const transporter = await createTransporter();
-    await transporter.sendMail({
-      from: `"Ubora Generals" <${process.env.EMAIL_USER}>`,
-      to,
-      subject,
-      html,
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: { raw: makeRawEmail(to, subject, html) },
     });
     console.log(`✅ Email sent successfully to ${to}: ${subject}`);
   } catch (error) {
