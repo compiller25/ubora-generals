@@ -1,0 +1,30 @@
+//this is the selcom documentation on installation and usage of their api for developers using node.js 
+# installation #
+npm i selcom-apigw-client
+
+
+//import package
+const {apigwClient } = require("selcom-apigw-client");
+// initalize a new apiAccess instace with values of the base url, api key and api secret
+
+client = new apigwClient(baseUrl, apiKey, apiSecret);
+
+// computeHeader a json containing data to bes submitted
+// computeHeader returns an array with values for the following header fields: 
+// Authorization, Timestamp, Digest, Signed-Fields
+client.computeHeader( jsonData):
+
+// postFuct takes relative path to base url. json containing data to be submitted 
+// It performs a POST request of the submitted data to the destniation url generatingg the header internally
+// IT returns a promise containing the response data to the request
+client.postFunc(path, jsonData)
+
+// getFuct takestakes relative path to base url. json containing data to be submitted  
+// It performs a GET request adding the query to the  url and generatingg the header internally
+// IT returns a promise containing the response data to the request
+client.getFunc(path, jsonData)
+
+// deletetFuct takes relative path to base url.json containing data to be submitted 
+// It performs a DELETE request adding the query to the  url and generatingg the header internally
+// IT returns a promise containing the response data to the request
+client.deleteFunc(path, jsonData)

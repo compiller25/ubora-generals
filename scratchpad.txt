@@ -1,0 +1,157 @@
+TASK ONE
+The business website will include a Home Page, Products Page, About Us section, Order Now 
+page, Payment Page, and Contact Us page. The homepage will feature the company logo, 
+business slogan, product images, and an Order Now button to encourage customer 
+engagement. 
+
+================================================================================
+TASK TWO — Authentication System Implementation Plan
+================================================================================
+Goal: Users must have an account and be logged in before they can purchase products.
+Approach: Client-side auth using localStorage (no backend needed). Pure React context.
+Strategy: Build bottom-up — storage → services → context → UI → routes → protection.
+
+IDENTITY CHANGE (user preference):
+  PRIMARY identifier = phone number (e.g. +255 712 345 678)
+  Email = optional (collected but not required, not used for lookup/login)
+  Login uses: phone + password
+  Registration uses: phone (required), password (required), fullName (required),
+                     address (required), email (optional)
+
+--------------------------------------------------------------------------------
+STEP 0 — Update Types  [src/types/auth.ts]
+--------------------------------------------------------------------------------
+Changes to existing types:
+  User:         replace `email: string` with `phone: string`, add `email?: string`
+  UserRecord:   same — phone required, email optional
+  SessionData:  replace `email` field with `phone`
+  AuthContextValue:
+    - register(phone, password, profile) — phone replaces email as first arg
+    - login(phone, password)             — phone replaces email
+  LoginFormState:    phone field instead of email, errors.phone instead of errors.email
+  RegistrationFormState: phone required, email optional
+  UserProfile:  phone already exists here (no change needed)
+
+--------------------------------------------------------------------------------
+STEP 1 — Validation  [src/auth/validation/index.ts]
+--------------------------------------------------------------------------------
+- validatePhone(phone): E.164-ish check, min 9 digits → returns ValidationResult
+- validatePassword(password): min 8 chars, at least one number → returns ValidationResult
+- validateEmail(email): optional helper, only called if email provided
+- NO required email validation in the main auth flow
+
+--------------------------------------------------------------------------------
+STEP 2 — User Store Service  [src/auth/services/userStore.ts]
+--------------------------------------------------------------------------------
+- localStorage key "ubora_users"
+- getUsers() / saveUsers(users)
+- findByPhone(phone): PRIMARY lookup (replaces findByEmail)
+- createUser(phone, passwordHash, profile): profile.email is optional
+- Returns UserRecord
+
+--------------------------------------------------------------------------------
+STEP 3 — Session Service  [src/auth/services/session.ts]
+--------------------------------------------------------------------------------
+- localStorage key "ubora_session"
+- saveSession(userId, phone): stores phone (not email) as the cached identifier
+- getSession(): validates expiry → returns SessionData | null
+- clearSession()
+- 7-day expiry + random session token
+
+--------------------------------------------------------------------------------
+STEP 4 — Password Service  [src/auth/services/password.ts]
+--------------------------------------------------------------------------------
+- hashPassword(password): Web Crypto API → SHA-256 hex (no deps)
+- verifyPassword(password, hash): re-hashes and compares
+- No change from original plan
+
+--------------------------------------------------------------------------------
+STEP 5 — Auth Context  [src/auth/context/AuthContext.tsx]
+--------------------------------------------------------------------------------
+- register(phone, password, profile):
+    1. validatePhone + validatePassword
+    2. check phone not already taken (findByPhone)
+    3. hashPassword
+    4. createUser(phone, passwordHash, profile)  ← profile.email may be undefined
+    5. saveSession(userId, phone)
+    6. set user state
+- login(phone, password):
+    1. findByPhone(phone)
+    2. verifyPassword
+    3. saveSession(userId, phone)
+    4. set user state
+- logout / checkAuth unchanged in logic, use phone instead of email in session
+
+--------------------------------------------------------------------------------
+STEP 6 — Login Form Component  [src/components/auth/LoginForm.tsx]
+--------------------------------------------------------------------------------
+- Fields: phone number + password
+- Phone input: type="tel", placeholder "+255 712 345 678"
+- Calls useAuth().login(phone, password)
+- Shows field errors + general error
+- On success: navigate to redirect param or /checkout
+- Link to /register
+
+--------------------------------------------------------------------------------
+STEP 7 — Register Form Component  [src/components/auth/RegisterForm.tsx]
+--------------------------------------------------------------------------------
+- Required fields: phone, password, fullName, address
+- Optional field: email (clearly marked "optional" in label)
+- Calls useAuth().register(phone, password, { fullName, phone, addresses: [address], email })
+- On success: navigate to /checkout
+- Link to /login
+
+--------------------------------------------------------------------------------
+STEP 8 — Login Route  [src/routes/login.tsx]
+--------------------------------------------------------------------------------
+- createFileRoute("/login")
+- validateSearch: { redirect?: string }
+- Renders LoginForm
+- Already-authenticated users → redirect to /
+
+--------------------------------------------------------------------------------
+STEP 9 — Register Route  [src/routes/register.tsx]
+--------------------------------------------------------------------------------
+- createFileRoute("/register")
+- Renders RegisterForm
+- Already-authenticated users → redirect to /
+
+--------------------------------------------------------------------------------
+STEP 10 — Checkout Route Auth Guard  [src/routes/checkout.tsx]
+--------------------------------------------------------------------------------
+- isLoading → spinner
+- !isAuthenticated → redirect to /login?redirect=/checkout
+- Authenticated → pre-fill fullName, phone, address from user.profile
+  (email field removed from checkout — not needed there)
+
+--------------------------------------------------------------------------------
+STEP 11 — Wire AuthProvider into app root  [src/main.tsx]
+--------------------------------------------------------------------------------
+- QueryClientProvider → AuthProvider → RouterProvider
+
+--------------------------------------------------------------------------------
+STEP 12 — Update Navigation  [src/components/Navigation.tsx]
+--------------------------------------------------------------------------------
+- Authenticated: show user's fullName (from profile) + Logout button
+- Not authenticated: Login + Register links
+- Display phone number optionally in user dropdown/menu
+
+================================================================================
+IMPLEMENTATION ORDER:
+  0. src/types/auth.ts            (modify — phone primary, email optional)
+  1. src/auth/validation/index.ts (new)
+  2. src/auth/services/password.ts (new)
+  3. src/auth/services/userStore.ts (new)
+  4. src/auth/services/session.ts  (new)
+  5. src/auth/context/AuthContext.tsx (new)
+  6. src/components/auth/LoginForm.tsx (new)
+  7. src/components/auth/RegisterForm.tsx (new)
+  8. src/routes/login.tsx          (new)
+  9. src/routes/register.tsx       (new)
+  10. src/routes/checkout.tsx      (modify — guard + pre-fill)
+  11. src/main.tsx                 (modify — AuthProvider)
+  12. src/components/Navigation.tsx (modify — auth UI)
+
+TOTAL: 7 new files, 4 modified files
+NO new npm dependencies — Web Crypto API + existing React/TanStack/shadcn libs.
+================================================================================

@@ -1,0 +1,106 @@
+========================================================================
+UBORA GENERAL ENTERPRISES — DEPLOYMENT GUIDE
+========================================================================
+
+Your project has two parts to host separately:
+  - Frontend (React/Vite SPA)
+  - Backend  (Express + MongoDB)
+
+------------------------------------------------------------------------
+RECOMMENDED STACK (free tier friendly)
+------------------------------------------------------------------------
+
+  Part       | Service          | Why
+  -----------|------------------|--------------------------------------
+  Frontend   | Vercel           | Best for Vite apps, free, instant deploys
+  Backend    | Render           | Free Express hosting, auto-deploy from GitHub
+  Database   | MongoDB Atlas    | Free 512MB cluster
+
+  Vercel:       https://vercel.com
+  Render:       https://render.com
+  MongoDB Atlas: https://cloud.mongodb.com
+
+------------------------------------------------------------------------
+STEP 1: MONGODB ATLAS (do this first)
+------------------------------------------------------------------------
+
+1. Sign up at https://cloud.mongodb.com
+2. Create a free M0 cluster
+3. Create a database user with a strong password
+4. Whitelist IP 0.0.0.0/0 (allow all — required for Render)
+5. Copy your connection string:
+   mongodb+srv://<user>:<password>@cluster.mongodb.net/ubora-generals
+
+------------------------------------------------------------------------
+STEP 2: BACKEND ON RENDER
+------------------------------------------------------------------------
+
+1. Push your code to GitHub (see Git Safety section below first)
+2. Go to https://render.com → New → Web Service
+3. Connect your GitHub repo, set root directory to: backend
+4. Build command:  npm install
+5. Start command:  node src/index.js
+6. Add ALL variables from backend/.env as Environment Variables in Render dashboard
+7. Replace MONGODB_URI with your Atlas connection string from Step 1
+8. Your live backend URL will look like:
+   https://ubora-backend.onrender.com
+
+------------------------------------------------------------------------
+STEP 3: FRONTEND ON VERCEL
+------------------------------------------------------------------------
+
+1. Go to https://vercel.com → New Project → Import from GitHub
+2. Framework preset: Vite
+3. Add this environment variable in Vercel dashboard:
+   VITE_API_URL = https://ubora-backend.onrender.com
+4. Click Deploy — Vercel handles the build automatically
+5. Your live frontend URL will look like:
+   https://ubora-generals.vercel.app
+
+------------------------------------------------------------------------
+STEP 4: UPDATE URLS AFTER HOSTING
+------------------------------------------------------------------------
+
+In Render dashboard, update backend environment variables:
+
+  CLIENT_URL              = https://your-vercel-app.vercel.app
+  FLUTTERWAVE_REDIRECT_URL = https://your-vercel-app.vercel.app/payment/callback
+
+In Flutterwave Dashboard → Settings → API → Webhooks:
+  Update webhook URL to:
+  https://ubora-backend.onrender.com/api/flutterwave/webhook
+
+  (You no longer need ngrok once the backend is live on Render)
+
+------------------------------------------------------------------------
+GIT SAFETY — BEFORE PUSHING TO GITHUB
+------------------------------------------------------------------------
+
+Your .gitignore is already configured to exclude:
+  - .env
+  - .env.local
+  - .env.development
+  - .env.production
+  - backend/.env
+
+NEVER commit these files. They contain your API keys, JWT secret,
+email credentials, and Flutterwave secret key.
+
+When pushing, double-check with:
+  git status
+
+If any .env file appears in the list, do NOT proceed until it is
+added to .gitignore and removed from tracking:
+  git rm --cached backend/.env
+
+------------------------------------------------------------------------
+DEPLOY ORDER
+------------------------------------------------------------------------
+
+  1. MongoDB Atlas  →  2. Render (Backend)  →  3. Vercel (Frontend)
+
+Each step depends on the previous one. Do not skip the order.
+
+========================================================================
+END OF FILE
+========================================================================

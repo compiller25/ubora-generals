@@ -1,0 +1,95 @@
+========================================================================
+SYSTEM RUNTIME BLUEPRINT: FLUTTERWAVE MOBILE MONEY SYSTEM OPERATIONAL FLOW
+========================================================================
+
+This document maps out exactly how the React (Frontend), Node.js (Backend), 
+MongoDB (Database), and Flutterwave (Payment Gateway) communicate asynchronously
+during a localized transaction lifecycle in Tanzania (TZS).
+
+------------------------------------------------------------------------
+STEP 1: THE USER INITIATES CHECKOUT (FRONTEND)
+------------------------------------------------------------------------
+- Location: The Checkout Page on your React web application.
+- User Actions:
+  1. User fills in their standard order details.
+  2. User selects the "Mobile Money" payment option.
+  3. User enters their mobile wallet phone number (e.g., 255712345678).
+  4. User selects their specific carrier from a dropdown menu (e.g., Mixx/Tigo, M-Pesa, Airtel, HaloPesa).
+  5. User clicks the "Pay Now" button.
+- React System State:
+  - React instantly toggles an `isLoading` boolean state to 'true'.
+  - The submit button is completely disabled in the UI to block double-clicks.
+  - React fires an HTTP POST payload containing { amount, email, phoneNumber, network } 
+    directly to your secure Express backend.
+
+------------------------------------------------------------------------
+STEP 2: PRE-AUTH LEDGER REGISTRATION (BACKEND & DATABASE)
+------------------------------------------------------------------------
+- Location: Your Node.js / Express Server API Route.
+- Backend Actions:
+  1. The server receives the payload from the React frontend.
+  2. The server generates an entirely unique tracking string known as 'tx_ref' 
+     (e.g., "TZ-ORDER-2026-89403").
+  3. The server immediately writes a new document into MongoDB with all user details, 
+     the unique 'tx_ref', the exact billing amount, and explicitly sets the 
+     transaction status to "pending".
+  4. The server now fires a secure backend-to-backend request directly to Flutterwave's 
+     Charge API via its secret token, providing the payload along with the exact carrier string 
+     mapping (e.g., 'TIGO', 'VODAFONE', 'AIRTEL', 'HALOPESA').
+
+------------------------------------------------------------------------
+STEP 3: TELECOM HANDSHAKE & THE STK PUSH PROMPT (EXTERNAL WAITING)
+------------------------------------------------------------------------
+- Location: Flutterwave Servers, Telecom Networks, and the User's Handset.
+- System Actions:
+  1. Flutterwave receives the backend API request, validates your API keys, and routes the 
+     charge command instantly to the local Tanzanian carrier clearing network.
+  2. Flutterwave returns a rapid "success / charge initiated" acknowledgement payload 
+     back to your Node.js backend.
+  3. Your Node.js backend catches this acknowledgement and relays a success flag back to React.
+  4. React UI updates dynamically: It stops the global page spinner and changes the interface 
+     to show a dedicated waiting screen instructing the user: "Please authorize the secure prompt 
+     sent to your phone."
+  5. User's Physical Handset Action: The telecom provider bypasses standard apps and forces 
+     a native secure STK Push PIN prompt to instantly light up on the customer's phone screen.
+  6. The user manually types their Mobile Money PIN into their phone and hits "Send / OK".
+
+------------------------------------------------------------------------
+STEP 4: ASYNCHRONOUS WEBHOOK CAPTURE (THE FUNDING BRIDGE)
+------------------------------------------------------------------------
+- Location: Telecom Carrier -> Flutterwave Servers -> Your Node.js Webhook URL.
+- System Actions:
+  1. The telecom network validates the user's PIN, shifts the money out of their phone wallet, 
+     and informs Flutterwave that the capture was successful.
+  2. Flutterwave instantly fires a real-time, event-driven HTTP POST request (a Webhook) 
+     directly to your public Express endpoint (e.g., `/api/payments/webhook`).
+  3. Secure Webhook Validation (Backend):
+     - Your backend receives the webhook payload.
+     - It reads the incoming header hash token and mirrors it against your hidden system secret.
+     - It extracts Flutterwave's transaction ID and runs a secondary lookup to Flutterwave's 
+       verification API route (`/v3/transactions/:id/verify`) to eliminate payload spoofing.
+  4. MongoDB State Mutation:
+     - Upon successful verification, the backend queries MongoDB for the matching 'tx_ref'.
+     - It rewrites the status string field inside MongoDB from "pending" to "successful".
+     - Downstream actions (e.g., generating receipts, dropping inventory counts) are fired.
+  5. Node.js sends an immediate HTTP 200 OK back to Flutterwave to close out the connection loop.
+
+------------------------------------------------------------------------
+STEP 5: AUTOMATIC FRONTEND RESYNC (THE GRAND FINALE)
+------------------------------------------------------------------------
+- Location: React Frontend Polling Engine.
+- System Actions:
+  1. While the user was busy on their physical phone handset in Step 3, your React page 
+     running in the browser kicked off a secure, automated `setInterval` hook.
+  2. Every 3 to 4 seconds, React hits a specific lightweight endpoint on your server: 
+     `GET /api/payments/status/TZ-ORDER-2026-89403`.
+  3. Your backend checks MongoDB for that specific document reference and responds with the current status.
+  4. For the first few calls, MongoDB returns "pending", so React maintains the waiting screen.
+  5. The instant Step 4 finishes writing the update, the next polling query reads "successful".
+  6. React intercepts the "successful" flag, safely destroys the clock interval loop, 
+     and immediately redirects the user's browser window to your beautiful "Order Confirmed" 
+     success page.
+
+========================================================================
+END OF FILE
+========================================================================

@@ -1,0 +1,21 @@
+node_modules
+dist
+.output
+
+# Environment files — never commit these
+.env
+.env.local
+.env.development
+.env.production
+backend/.env
+
+# Local notes/scratch files with sensitive info
+fluuter.txt
+mongo infos.txt
+scratchpad.txt
+deployment.txt
+payment-integration.txt
+AZAMPAY_TESTING.md
+SELCOM_TESTING.md
+selcom.txt
+files.zip
