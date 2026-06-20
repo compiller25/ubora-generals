@@ -6,7 +6,7 @@ export async function sendEmail(to: string, subject: string, html: string) {
   try {
     console.log(`Attempting to send email to: ${to}`);
     await resend.emails.send({
-      from: 'Ubora Generals <onboarding@resend.dev>',
+      from: 'Ubora Generals <orders@coraurna.resend.app>',
       to,
       subject,
       html,
