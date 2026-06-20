@@ -1,12 +1,38 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
+import { google } from 'googleapis';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const OAuth2 = google.auth.OAuth2;
+
+async function createTransporter() {
+  const oauth2Client = new OAuth2(
+    process.env.GMAIL_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET,
+    'https://developers.google.com/oauthplayground'
+  );
+
+  oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
+
+  const { token: accessToken } = await oauth2Client.getAccessToken();
+
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      type: 'OAuth2',
+      user: process.env.EMAIL_USER,
+      clientId: process.env.GMAIL_CLIENT_ID,
+      clientSecret: process.env.GMAIL_CLIENT_SECRET,
+      refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+      accessToken: accessToken!,
+    },
+  } as any);
+}
 
 export async function sendEmail(to: string, subject: string, html: string) {
   try {
     console.log(`Attempting to send email to: ${to}`);
-    await resend.emails.send({
-      from: 'Ubora Generals <orders@coraurna.resend.app>',
+    const transporter = await createTransporter();
+    await transporter.sendMail({
+      from: `"Ubora Generals" <${process.env.EMAIL_USER}>`,
       to,
       subject,
       html,
